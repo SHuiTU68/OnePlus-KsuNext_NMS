@@ -3,7 +3,7 @@ name: 构建并发布 OnePlus 内核
 run-name: >-
   ${{ github.event.inputs.op_target_model != '' && github.event.inputs.op_target_model || github.event.inputs.op_model }}
   • KSUN
-  • ${{ github.event.inputs.build_timestamp != '' && github.event.inputs.build_timestamp || '自动时间戳' }}
+  • 自动时间戳
 
 permissions:
   contents: write
@@ -51,10 +51,6 @@ on:
         type: choice
         options: [O2, O3]
         default: O2
-      build_timestamp:
-        description: '自定义内核构建时间戳（显示于 uname -a；例 "Fri Dec 5 02:05:55 UTC 2025"）。留空则使用当前时间。'
-        type: string
-        default: ''
       kernel_suffix:
         description: '自定义内核后缀（会追加到内核版本号、ZIP 文件名与 Release 标题；留空则不启用；开头勿加连字符，勿含空格等字符）'
         required: false
@@ -154,16 +150,6 @@ on:
         required: false
         type: boolean
         default: false
-      nomount_ref:
-        description: 'NoMount-Suite 的分支/引用（提供 Prism 引擎源码与补丁；默认 main；可设某分支先行验证）。引擎位于该仓库 hookless/ 目录。'
-        required: false
-        type: string
-        default: main
-      patches_ref:
-        description: 'kernel_patches 的分支/引用（提供 _ghost/_hook/_pathhide 隐藏特性与 apply 脚本；默认 main；可设分支先行验证）'
-        required: false
-        type: string
-        default: main
 
 jobs:
   set-op-model:
@@ -348,7 +334,7 @@ jobs:
           active_gki_keys_csv=$(IFS=','; echo "${active_keys[*]:-}")
           echo "active_gki_keys=$active_gki_keys_csv" >> "$GITHUB_OUTPUT"
 
-          NM_HDR_URL="https://raw.githubusercontent.com/Bouteillepleine/NoMount-Suite/${{ inputs.nomount_ref || 'main' }}/hookless/src/nomount.h"
+          NM_HDR_URL="https://raw.githubusercontent.com/Bouteillepleine/NoMount-Suite/main/hookless/src/nomount.h"
           nomount_version="unknown"
 
           for attempt in 1 2 3; do
@@ -369,7 +355,7 @@ jobs:
           echo "  ✅ NoMount version: $nomount_version"
 
           if [ "${{ inputs.make_release }}" = "true" ] && [ "$nomount_version" = "unknown" ]; then
-            echo "::error::Could not read NM_MODULE_VERSION from NoMount-Suite@${{ inputs.nomount_ref || 'main' }}. Cannot proceed with release."
+            echo "::error::Could not read NM_MODULE_VERSION from NoMount-Suite@main. Cannot proceed with release."
             exit 1
           fi
 
@@ -409,7 +395,7 @@ jobs:
             ksu_display+="🔀 \`$ksu_type\`, \`$ksu_ref\` (\`${{ steps.set-matrix.outputs.ksu_resolved_hash }}\`)"
           fi
           
-          build_ts_input="${{ inputs.build_timestamp }}"
+          build_ts_input=""
           if [ -z "$build_ts_input" ]; then
             build_ts_display="⏱️ 自动（当前构建时间）"
           else
@@ -638,13 +624,13 @@ jobs:
           ksu_type: ${{ matrix.ksu_type }}
           ksu_branch_or_hash: ${{ matrix.ksu_resolved_hash }}
           optimize_level: ${{ inputs.optimize_level }}
-          build_timestamp: ${{ inputs.build_timestamp }}
+          build_timestamp: ''
           kernel_suffix: ${{ inputs.kernel_suffix }}
           enable_adios: ${{ inputs.enable_adios }}
           lz4_enable: ${{ inputs.lz4_enable }}
           lz4kd_enable: ${{ inputs.lz4kd_enable }}
-          nomount_ref: ${{ inputs.nomount_ref }}
-          patches_ref: ${{ inputs.patches_ref }}
+          nomount_ref: main
+          patches_ref: main
           clean: ${{ inputs.clean_build }}
           debug: ${{ inputs.debug }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
