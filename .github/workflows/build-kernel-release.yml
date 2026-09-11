@@ -1,7 +1,7 @@
 name: 构建并发布 OnePlus 内核
 
 run-name: >-
-  ${{ github.event.inputs.op_target_model != '' && github.event.inputs.op_target_model || github.event.inputs.op_model }}
+  ${{ github.event.inputs.op_model }}
   • KSUN
   • 自动时间戳
 
@@ -12,7 +12,7 @@ permissions:
 concurrency:
   group: >-
     ${{ github.workflow }}-${{ github.event.inputs.make_release == 'true' && 'release' || 'test' }}-${{ github.ref
-    }}-${{ github.event.inputs.op_target_model || github.event.inputs.op_model }}
+    }}-${{ github.event.inputs.op_model }}
   cancel-in-progress: ${{ github.event.inputs.make_release != 'true' }}
 
 on:
@@ -24,22 +24,12 @@ on:
         type: boolean
         default: false
       op_model:
-        description: '选择要构建的 OnePlus 内核'
+        description: '选择要构建的 OnePlus内核（当前仓库仅保留一加 Ace5至尊版）'
         required: true
         type: choice
         options:
-          - A16
-          - android16-6.12
-          - android15-6.6
-          - android14-6.1
-          - android13-5.15
-          - android12-5.10
-        default: A16
-      op_target_model:
-        description: '可选的精确机型/前缀：OP12, OP13-CPH, OP-NORD-4, OP12-6.1.118（区分大小写）。留空 = 全部。'
-        required: false
-        type: string
-        default: ''
+          - OP-ACE-5-ULTRA
+        default: OP-ACE-5-ULTRA
       ksu_options:
         description: '输入 KernelSU Next 构建 JSON'
         required: true
@@ -85,13 +75,13 @@ on:
         required: false
         type: boolean
         default: false
+      nomount_ref:
+        description: 'NoMount-Suite 的分支/引用（提供 Prism 引擎源码与补丁；默认 main；可设某分支先行验证）。引擎位于该仓库 hookless/ 目录。'
+        required: false
+        type: string
+        default: main
       hmbird:
         description: '特性开关：hmbird 硬件特性（默认开）'
-        required: false
-        type: boolean
-        default: true
-      nomount:
-        description: '特性开关：NoMount 内置 NMS（hookless 挂载；默认开）'
         required: false
         type: boolean
         default: true
@@ -164,7 +154,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_HTTP_TIMEOUT: 600
-      OP_OVERRIDES_JSON: '{"hmbird": ${{ inputs.hmbird }}, "NMS": ${{ inputs.nomount }}, "opt": ${{ inputs.opt }}, "ds": ${{ inputs.ds }}, "bbg": ${{ inputs.bbg }}, "bbr": ${{ inputs.bbr }}, "bbr3": ${{ inputs.bbr3 }}, "ttl": ${{ inputs.ttl }}, "ip_set": ${{ inputs.ip_set }}, "unicode": ${{ inputs.unicode }}, "ntsync": ${{ inputs.ntsync }}, "rust_build": ${{ inputs.rust_build }}, "disk_cleanup": ${{ inputs.disk_cleanup }}}'
+      OP_OVERRIDES_JSON: '{"hmbird": ${{ inputs.hmbird }}, "opt": ${{ inputs.opt }}, "ds": ${{ inputs.ds }}, "bbg": ${{ inputs.bbg }}, "bbr": ${{ inputs.bbr }}, "bbr3": ${{ inputs.bbr3 }}, "ttl": ${{ inputs.ttl }}, "ip_set": ${{ inputs.ip_set }}, "unicode": ${{ inputs.unicode }}, "ntsync": ${{ inputs.ntsync }}, "rust_build": ${{ inputs.rust_build }}, "disk_cleanup": ${{ inputs.disk_cleanup }}}'
     steps:
       - name: 📥 检出代码（用于读取 configs/）
         uses: actions/checkout@v6
@@ -177,7 +167,6 @@ jobs:
           echo "::group::Matrix generation"
           
           input="${{ github.event.inputs.op_model }}"
-          target_model="${{ github.event.inputs.op_target_model }}"
           ksu_options_raw='${{ github.event.inputs.ksu_options }}'
           if ! ksu_options_normalized=$(echo "$ksu_options_raw" | jq -c 'map(if .type then .type |= ascii_upcase | if .hash == null then .hash = "dev" else . end else error("No type found") end)' 2>&1); then
             echo "::error::ksu_options validation failed: $ksu_options_normalized"
@@ -202,7 +191,7 @@ jobs:
           jq_filter="."
           
           case "$input" in
-            A16)
+            A16|OP-ACE-5-ULTRA)
               jq_filter="map(select(.os_version == \"A16\"))"
               ;;
             android*-*.*)
@@ -224,15 +213,7 @@ jobs:
           filtered=$(echo "$filtered" | jq -c --argjson ov "$OP_OVERRIDES_JSON" 'map(. + $ov)')
           echo "🎛️ Feature overrides: $OP_OVERRIDES_JSON"
 
-          if [ -n "$target_model" ]; then
-            echo "🎯 Target model filter enabled: $target_model"
-            echo "   Matching exact model OR versioned model prefix."
-            filtered=$(echo "$filtered" | jq -c --arg target "$target_model" '
-              map(select(.model == $target or (.model | startswith($target + "-"))))
-            ')
-          else
-            echo "ℹ️  No target model selected. Building all configs matching op_model='$input'."
-          fi
+          # ℹ️ 单机型仓库：精选机型过滤已移除
 
           count=$(jq 'length' <<<"$filtered")
           
@@ -244,7 +225,7 @@ jobs:
           ')
           
           if [ "$count" -eq 0 ]; then
-            echo "::error::No config files found for op_model='$input' and op_target_model='${target_model:-<empty>}' after applying filters!"
+            echo "::error::No config files found for op_model='$input' after applying filters!"
             echo ""
             echo "Available configurations:"
             jq -r '.[] | "  - \(.model) (\(.os_version), \(.android_version)-\(.kernel_version))"' matrix.json
@@ -334,7 +315,7 @@ jobs:
           active_gki_keys_csv=$(IFS=','; echo "${active_keys[*]:-}")
           echo "active_gki_keys=$active_gki_keys_csv" >> "$GITHUB_OUTPUT"
 
-          NM_HDR_URL="https://raw.githubusercontent.com/Bouteillepleine/NoMount-Suite/main/hookless/src/nomount.h"
+          NM_HDR_URL="https://raw.githubusercontent.com/Bouteillepleine/NoMount-Suite/${{ inputs.nomount_ref || 'main' }}/hookless/src/nomount.h"
           nomount_version="unknown"
 
           for attempt in 1 2 3; do
@@ -355,7 +336,7 @@ jobs:
           echo "  ✅ NoMount version: $nomount_version"
 
           if [ "${{ inputs.make_release }}" = "true" ] && [ "$nomount_version" = "unknown" ]; then
-            echo "::error::Could not read NM_MODULE_VERSION from NoMount-Suite@main. Cannot proceed with release."
+            echo "::error::Could not read NM_MODULE_VERSION from NoMount-Suite@${{ inputs.nomount_ref || 'main' }}. Cannot proceed with release."
             exit 1
           fi
 
@@ -409,7 +390,7 @@ jobs:
             echo ""
             echo "| 设置项 | 值 |"
             echo "|---------|-------|"
-            echo "| 🎯 目标 | \`${{ inputs.op_model }}\` · 机型 \`${{ inputs.op_target_model != '' && inputs.op_target_model || 'all' }}\` · **${{ steps.set-matrix.outputs.count }}** 台设备 |"
+            echo "| 🎯 目标 | \`${{ inputs.op_model }}\` · **${{ steps.set-matrix.outputs.count }}** 台设备 |"
             echo "| 🧩 KSU | $ksu_display |"
             echo "| ⏱️ 时间戳 | $build_ts_display |"
             echo "| ⚙️ 优化等级 | \`${{ inputs.optimize_level }}\` |"
@@ -629,7 +610,7 @@ jobs:
           enable_adios: ${{ inputs.enable_adios }}
           lz4_enable: ${{ inputs.lz4_enable }}
           lz4kd_enable: ${{ inputs.lz4kd_enable }}
-          nomount_ref: main
+          nomount_ref: ${{ inputs.nomount_ref }}
           patches_ref: main
           clean: ${{ inputs.clean_build }}
           debug: ${{ inputs.debug }}
