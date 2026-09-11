@@ -1468,9 +1468,41 @@ runs:
         echo "Customize Kernel Branding"
         cd "$COMMON_KERNEL_FOLDER"
         mkdir -p out
+        # kbuild enforces a hard 64-char limit on the utsrelease string.
+        # Reserve budget for the base release ("6.6.118" = 7 chars); first
+        # drop a duplicated "Android15-" prefix from the suffix, then
+        # truncate as a last resort so long suffixes never break the build.
+        MAX_LV=56
         CUSTOM_LOCALVERSION="-${ANDROID_VER}-${OP_UNAME}"
-        if [ -n "${{ inputs.kernel_suffix }}" ]; then
-          CUSTOM_LOCALVERSION="${CUSTOM_LOCALVERSION}-${{ inputs.kernel_suffix }}"
+        SUFFIX="${{ inputs.kernel_suffix }}"
+        if [ -n "$SUFFIX" ]; then
+          CANDIDATE="${CUSTOM_LOCALVERSION}-${SUFFIX}"
+          if [ ${#CANDIDATE} -le $MAX_LV ]; then
+            CUSTOM_LOCALVERSION="$CANDIDATE"
+          else
+            case "$SUFFIX" in
+              Android15-*) TRIMMED="${SUFFIX#Android15-}" ;;
+              android15-*) TRIMMED="${SUFFIX#android15-}" ;;
+              *) TRIMMED="$SUFFIX" ;;
+            esac
+            CANDIDATE="${CUSTOM_LOCALVERSION}-${TRIMMED}"
+            if [ -n "$TRIMMED" ] && [ ${#CANDIDATE} -le $MAX_LV ]; then
+              CUSTOM_LOCALVERSION="$CANDIDATE"
+              echo "::warning::kernel_suffix '${SUFFIX}' shortened to '${TRIMMED}' to fit the 64-char utsrelease limit"
+            else
+              ALLOW=$((MAX_LV - ${#CUSTOM_LOCALVERSION} - 1))
+              if [ "$ALLOW" -lt 0 ]; then ALLOW=0; fi
+              CUT="${TRIMMED:0:$ALLOW}"
+              if [ -n "$CUT" ]; then
+                CUSTOM_LOCALVERSION="${CUSTOM_LOCALVERSION}-${CUT}"
+              fi
+              echo "::warning::kernel_suffix truncated to '${CUT}' to fit the 64-char utsrelease limit"
+            fi
+          fi
+        fi
+        if [ ${#CUSTOM_LOCALVERSION} -gt $MAX_LV ]; then
+          CUSTOM_LOCALVERSION="${CUSTOM_LOCALVERSION:0:$MAX_LV}"
+          echo "::warning::CUSTOM_LOCALVERSION truncated to fit the 64-char utsrelease limit"
         fi
         echo "CUSTOM_LOCALVERSION=$CUSTOM_LOCALVERSION" >> "$GITHUB_ENV"
 
