@@ -4,7 +4,7 @@
   "branch": "wild/mt6991",
   "manifest": "oneplus_ace5_ultra_6.6.89_w.xml",
   "android_version": "android15",
-  "kernel_version": "6.6",
+  "kernel_version": "6.6.89",
   "os_version": "A16",
   "lto": "thin",
   "zyc_compiler": "",

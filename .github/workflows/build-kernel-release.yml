@@ -89,6 +89,71 @@ on:
         required: false
         type: boolean
         default: false
+      hmbird:
+        description: '特性开关：hmbird 硬件特性（默认开）'
+        required: false
+        type: boolean
+        default: true
+      nomount:
+        description: '特性开关：NoMount 内置 NMS（hookless 挂载；默认开）'
+        required: false
+        type: boolean
+        default: true
+      opt:
+        description: '特性开关：优化补丁 Optimization patches（默认关）'
+        required: false
+        type: boolean
+        default: false
+      ds:
+        description: '特性开关：DroidSpaces 容器支持（默认关）'
+        required: false
+        type: boolean
+        default: false
+      bbg:
+        description: '特性开关：BBG（默认开）'
+        required: false
+        type: boolean
+        default: true
+      bbr:
+        description: '特性开关：BBR 拥塞控制（默认开）'
+        required: false
+        type: boolean
+        default: true
+      bbr3:
+        description: '特性开关：BBRv3 拥塞控制（默认开）'
+        required: false
+        type: boolean
+        default: true
+      ttl:
+        description: '特性开关：TTL 修改支持（默认开）'
+        required: false
+        type: boolean
+        default: true
+      ip_set:
+        description: '特性开关：IP_SET 与 IPv6 NAT 支持（默认开）'
+        required: false
+        type: boolean
+        default: true
+      unicode:
+        description: '特性开关：Unicode 修复（默认开）'
+        required: false
+        type: boolean
+        default: true
+      ntsync:
+        description: '特性开关：NTSync 支持（默认关）'
+        required: false
+        type: boolean
+        default: false
+      rust_build:
+        description: '特性开关：Rust 组件构建（默认关）'
+        required: false
+        type: boolean
+        default: false
+      disk_cleanup:
+        description: '特性开关：构建前磁盘清理（默认关）'
+        required: false
+        type: boolean
+        default: false
       nomount_ref:
         description: 'NoMount-Suite 的分支/引用（提供 Prism 引擎源码与补丁；默认 main；可设某分支先行验证）。引擎位于该仓库 hookless/ 目录。'
         required: false
@@ -113,6 +178,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_HTTP_TIMEOUT: 600
+      OP_OVERRIDES_JSON: '{"hmbird": ${{ inputs.hmbird }}, "NMS": ${{ inputs.nomount }}, "opt": ${{ inputs.opt }}, "ds": ${{ inputs.ds }}, "bbg": ${{ inputs.bbg }}, "bbr": ${{ inputs.bbr }}, "bbr3": ${{ inputs.bbr3 }}, "ttl": ${{ inputs.ttl }}, "ip_set": ${{ inputs.ip_set }}, "unicode": ${{ inputs.unicode }}, "ntsync": ${{ inputs.ntsync }}, "rust_build": ${{ inputs.rust_build }}, "disk_cleanup": ${{ inputs.disk_cleanup }}}'
     steps:
       - name: 📥 检出代码（用于读取 configs/）
         uses: actions/checkout@v6
@@ -156,7 +222,7 @@ jobs:
             android*-*.*)
               IFS='-' read -r av kv <<< "$input"
               
-              jq_filter="map(select(.os_version == \"A16\")) | map(select(.android_version == \"$av\" and .kernel_version == \"$kv\"))"
+              jq_filter="map(select(.os_version == \"A16\")) | map(select(.android_version == \"$av\" and (.kernel_version == \"$kv\" or (.kernel_version | startswith(\"$kv.\")))))"
               
               echo "ℹ️  Android-Kernel filter applied: $av-$kv"
               echo "   Restricted to: A16 only"
@@ -168,6 +234,9 @@ jobs:
           esac
           
           filtered=$(jq -c "$jq_filter" matrix.json)
+          # 🎛️ 应用工作流级特性开关覆盖（workflow_dispatch 输入优先于 config json 默认值）
+          filtered=$(echo "$filtered" | jq -c --argjson ov "$OP_OVERRIDES_JSON" 'map(. + $ov)')
+          echo "🎛️ Feature overrides: $OP_OVERRIDES_JSON"
 
           if [ -n "$target_model" ]; then
             echo "🎯 Target model filter enabled: $target_model"
@@ -270,7 +339,7 @@ jobs:
           
           mapfile -t active_keys < <(
             echo "$merged_matrix" \
-              | jq -r '.[] | select(.NMS == true) | "\(.android_version)-\(.kernel_version)"' \
+              | jq -r '.[] | select(.NMS == true) | "\(.android_version)-\(.kernel_version | split(".") | .[0:2] | join("."))"' \
               | sort -u
           )
 

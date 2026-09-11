@@ -226,8 +226,8 @@ runs:
         
         if [[ -z "$kernel_version" ]]; then
           errors+=("Input 'kernel_version' cannot be empty")
-        elif [[ ! "$kernel_version" =~ ^[0-9]+\.[0-9]+$ ]]; then
-          errors+=("Input 'kernel_version' contains invalid characters. Allowed: number in X.Y format. Got: '$kernel_version'")
+        elif [[ ! "$kernel_version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+          errors+=("Input 'kernel_version' contains invalid characters. Allowed: X.Y or X.Y.Z format. Got: '$kernel_version'")
         fi
         
         if [[ -z "$os_version" ]]; then
