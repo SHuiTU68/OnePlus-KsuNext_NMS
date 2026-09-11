@@ -1,99 +1,104 @@
-name: 'Build OnePlus Kernel with KernelSU Next'
+name: '使用 KernelSU Next 构建 OnePlus 内核'
 
 inputs:
   op_config_json:
-    description: 'JSON string containing full device config'
+    description: '包含完整设备配置的 JSON 字符串'
     required: true
     type: string
   ksu_type:
-    description: 'Select KSU Type'
+    description: '选择 KSU 类型'
     required: true
     type: choice
     options:
       - KSUN
   ksu_branch_or_hash:
-    description: 'KSU branch or commit hash (empty = auto-detect by ksu_type)'
+    description: 'KSU 分支或提交哈希（留空 = 按 ksu_type 自动检测）'
     required: false
     type: string
     default: ""
   build_timestamp:
-    description: 'Custom kernel build timestamp shown in uname -a (e.g. "Fri Dec 5 02:05:55 UTC 2025"). Leave empty to use the current build time.'
+    description: '自定义内核构建时间戳（显示于 uname -a；例 "Fri Dec 5 02:05:55 UTC 2025"）。留空则使用当前构建时间。'
+    required: false
+    type: string
+    default: ''
+  kernel_suffix:
+    description: '自定义内核后缀（会追加到内核版本号与 ZIP 文件名；留空则不启用；开头勿加连字符，勿含空格等字符）'
     required: false
     type: string
     default: ''
   optimize_level:
-    description: 'Compiler optimization level (O2 or O3)'
+    description: '编译器优化等级（O2 或 O3）'
     required: false
     type: string
     default: O2
   clean:
-    description: 'Force clean build without ccache acceleration'
+    description: '强制全新构建，不使用 ccache 加速'
     required: false
     type: boolean
     default: false
   debug:
-    description: 'Enable dumping debug related artifacts'
+    description: '启用调试产物导出'
     required: false
     type: boolean
     default: false
   enable_adios:
-    description: 'Enable ADIOS I/O scheduler support (5.10/5.15/6.1/6.6/6.12 kernels)'
+    description: '启用 ADIOS I/O 调度器支持（5.10/5.15/6.1/6.6/6.12 内核）'
     required: false
     type: boolean
     default: false
   nomount_ref:
-    description: 'NoMount-Suite branch/ref to source the Prism engine src + patches from (default main; set a branch to validate it before it is released). The engine ships inside the Suite repo, under hookless/.'
+    description: 'NoMount-Suite 的分支/引用（提供 Prism 引擎源码与补丁；默认 main；可设分支先行验证）。引擎位于该仓库 hookless/ 目录。'
     required: false
     type: string
     default: main
   patches_ref:
-    description: 'kernel_patches branch/ref to source the _ghost/_hook/_pathhide cloaks and the apply script from (default main; set a test branch to validate before merge)'
+    description: 'kernel_patches 的分支/引用（提供 _ghost/_hook/_pathhide 隐藏特性与 apply 脚本；默认 main；可设测试分支先行验证）'
     required: false
     type: string
     default: main
   github_token:
-    description: 'GitHub Token'
+    description: 'GitHub 令牌'
     required: true
 
 outputs:
   kernel_version:
-    description: 'Full kernel version string'
+    description: '完整内核版本字符串'
     value: ${{ steps.save_metadata.outputs.kernel_version }}
   ksu_version:
-    description: 'KernelSU Next version number'
+    description: 'KernelSU Next 版本号'
     value: ${{ steps.save_metadata.outputs.ksu_version }}
   ksu_type:
-    description: 'KernelSU Next Variant'
+    description: 'KernelSU Next 变体'
     value: ${{ steps.save_metadata.outputs.ksu_type }}
   build_timestamp:
-    description: 'Effective kernel build timestamp used in uname -a'
+    description: '用于 uname -a 的实际内核构建时间戳'
     value: ${{ steps.save_metadata.outputs.build_timestamp }}
   image_sha256:
-    description: 'SHA256 hash of kernel Image'
+    description: '内核 Image 的 SHA256 哈希'
     value: ${{ steps.collect_stats.outputs.image_sha256 }}
   zip_sha256:
-    description: 'SHA256 hash of AnyKernel3 Zip'
+    description: 'AnyKernel3 Zip 的 SHA256 哈希'
     value: ${{ steps.create_zip.outputs.zip_sha256 }}
   warnings:
-    description: 'Number of compiler warnings'
+    description: '编译器警告数量'
     value: ${{ steps.collect_stats.outputs.warnings_count }}
   build_time:
-    description: 'Total build time in seconds'
+    description: '总构建耗时（秒）'
     value: ${{ steps.collect_stats.outputs.build_time }}
   ccache_hit_rate:
-    description: 'ccache hit rate percentage'
+    description: 'ccache 命中率（百分比）'
     value: ${{ steps.ccache_stats.outputs.hit_rate }}
   ccache_direct_rate:
-    description: 'ccache direct hit rate percentage'
+    description: 'ccache 直接命中率（百分比）'
     value: ${{ steps.ccache_stats.outputs.direct_rate }}
   zip_name:
-    description: 'Name of the generated flashable ZIP'
+    description: '生成的卡刷 ZIP 文件名'
     value: ${{ steps.create_zip.outputs.zip_name }}
 
 runs:
   using: 'composite'
   steps:
-    - name: Get Action info
+    - name: 获取 Action 信息
       shell: bash
       env:
         ACTION_REPO_VAL: ${{ github.action_repository }}
@@ -103,7 +108,7 @@ runs:
         echo "ACTION_REPO=$ACTION_REPO_VAL" >> $GITHUB_ENV
         echo "ACTION_REF=$ACTION_REF_VAL" >> $GITHUB_ENV
 
-    - name: 📥 Checkout Code
+    - name: 📥 检出代码
       uses: actions/checkout@v6
       with:
         repository: ${{ env.ACTION_REPO }}
@@ -111,7 +116,7 @@ runs:
         path: action-source
         fetch-depth: 1
 
-    - name: Parse op_config_json
+    - name: 解析 op_config_json
       shell: bash
       run: |
         set -euo pipefail
@@ -120,7 +125,7 @@ runs:
         echo "Parsed config:"
         jq '.' /tmp/config.json
 
-    - name: Validate KSU Type
+    - name: 校验 KSU 类型
       shell: bash
       run: |
         set -euo pipefail
@@ -132,7 +137,7 @@ runs:
 
         echo "✅ KSU type validated: ${{ inputs.ksu_type }}"
 
-    - name: Validate Inputs
+    - name: 校验输入
       shell: bash
       run: |
         set -euo pipefail
@@ -327,7 +332,7 @@ runs:
         fi
         echo "::endgroup::"
 
-    - name: Setup Base Environment
+    - name: 搭建基础环境
       shell: bash
       run: |
         set -euo pipefail
@@ -342,7 +347,7 @@ runs:
         fi
         echo "REPO=$REPO" >> "$GITHUB_ENV"
 
-    - name: Optimize Global Git for Repo Tool
+    - name: 为 repo 工具优化全局 Git
       shell: bash
       run: |
         set -euo pipefail
@@ -350,7 +355,7 @@ runs:
         git config --global core.fsmonitor true
         git config --global pack.sparse true
 
-    - name: Sync Kernel Source
+    - name: 同步内核源码
       id: sync-kernel-source
       uses: ./action-source/.github/actions/kernel-source-sync
       with:
@@ -358,7 +363,7 @@ runs:
         github_token: ${{ inputs.github_token }}
         debug: ${{ inputs.debug }}
 
-    - name: Set Dir Paths
+    - name: 设置目录路径
       shell: bash
       run: |
         set -euo pipefail
@@ -387,14 +392,14 @@ runs:
         DEBUG_ZIP_NAME="debug_${OP_MODEL}_${OP_OS_VERSION}.zip"
         echo "DEBUG_ZIP_NAME=$DEBUG_ZIP_NAME" >> "$GITHUB_ENV"
 
-    - name: Set Kernel build-tools to Path
+    - name: 将内核 build-tools 加入 PATH
       shell: bash
       run: |
         set -euo pipefail
         echo "${KERNEL_PLATFORM_FOLDER}/prebuilts/kernel-build-tools/linux-x86/bin/" >> $GITHUB_PATH
         echo "${KERNEL_PLATFORM_FOLDER}/prebuilts/kernel-build-tools/linux_musl-x86/bin/" >> $GITHUB_PATH
 
-    - name: Get Kernel Version Info
+    - name: 获取内核版本信息
       shell: bash
       run: |
         set -euo pipefail
@@ -441,7 +446,7 @@ runs:
         echo "✅ Detected: $ANDROID_VERSION-$FULL_VERSION"
         echo "::endgroup::"
 
-    - name: 🏷️ Set Build Identity (Hardcoded)
+    - name: 🏷️ 设置构建身份（固定值）
       shell: bash
       run: |
         set -euo pipefail
@@ -459,7 +464,7 @@ runs:
         echo "   Host: $BUILD_HOST"
         echo "::endgroup::"
 
-    - name: Check or Detect Clang
+    - name: 检查或检测 Clang
       shell: bash
       run: |
         set -euo pipefail
@@ -571,7 +576,7 @@ runs:
         echo "✅ Detected Clang: $CLANG_VERSION"
         echo "::endgroup::"
 
-    - name: Check or Detect Rust & bindgen
+    - name: 检查或检测 Rust 与 bindgen
       shell: bash
       if: ${{ env.OP_RUST_BUILD == 'true' }}
       run: |
@@ -636,7 +641,7 @@ runs:
         
         echo "::endgroup::"
 
-    - name: Install bindgen only (no rustc)
+    - name: 仅安装 bindgen（无 rustc）
       shell: bash
       if: ${{ env.OP_RUST_BUILD == 'true'  && !env.BINDGEN_BIN_PATH }}
       run: |
@@ -655,7 +660,7 @@ runs:
         bindgen --version
         echo "::endgroup::"
 
-    - name: Test Rust & bindgen
+    - name: 测试 Rust 与 bindgen
       shell: bash
       if: ${{ env.OP_RUST_BUILD == 'true' }}
       run: |
@@ -666,7 +671,7 @@ runs:
         make V=1 rustavailable
         echo "::endgroup::"
 
-    - name: Restore ccache cache
+    - name: 恢复 ccache 缓存
       id: restore-ccache-cache
       uses: ./action-source/.github/actions/cache/restore
       if: ${{ inputs.clean == false || inputs.clean == 'false' }}
@@ -680,7 +685,7 @@ runs:
           ${{ inputs.ksu_type }}-v3-${{ env.OP_MODEL }}-${{ env.OP_OS_VERSION }}-${{ env.KERNEL_FULL_VER }}-
           ${{ inputs.ksu_type }}-v3-${{ env.OP_MODEL }}-${{ env.OP_OS_VERSION }}-
 
-    - name: Check and Prepare Caches
+    - name: 检查并准备缓存
       shell: bash
       run: |
         echo "::group::Check ccache"
@@ -710,7 +715,7 @@ runs:
         
         echo "::endgroup::"
 
-    - name: Fetch Build Dependencies
+    - name: 获取构建依赖
       shell: bash
       run: |
         echo "::group::Fetch dependencies"
@@ -821,7 +826,7 @@ runs:
         echo "✅ Dependencies cloned"
         echo "::endgroup::"
 
-    - name: Clean Up ABI Protected Exports
+    - name: 清理 ABI 保护导出
       shell: bash
       run: |
         echo "::group::Clean Up ABI Protected Exports"
@@ -831,7 +836,7 @@ runs:
         sed -i 's/protected_modules = \[.*\]/protected_modules = []/' common/modules.bzl || true
         echo "::endgroup::"
 
-    - name: Add KernelSU Next
+    - name: 添加 KernelSU Next
       shell: bash
       if: ${{ inputs.ksu_type == 'KSUN' }}
       run: |
@@ -919,12 +924,12 @@ runs:
     # Bisected on OP11: boots on 2482c569, bootloops on 8b9d7a7a, engine and
     # kernel source held constant. No-op on a KernelSU-Next without the defect,
     # and a no-op at runtime wherever CONFIG_CFI_CLANG is off.
-    - name: Fix KSU SELinux symbol calls under CFI
+    - name: 修复 CFI 下的 KSU SELinux 符号调用
       shell: bash
       run: |
         bash "$BOUTEILLE_KERNEL_PATCHES_FOLDER/scripts/fix_ksu_cfi_symbol_calls.sh"
 
-    - name: Apply NoMount (hookless) Patch
+    - name: 应用 NoMount（hookless）补丁
       if: ${{ env.OP_NMS == 'true' }}
       shell: bash
       env:
@@ -932,7 +937,7 @@ runs:
       run: |
         bash "$BOUTEILLE_KERNEL_PATCHES_FOLDER/scripts/apply_nomount_stack.sh" hookless
 
-    - name: Record NoMount Version
+    - name: 记录 NoMount 版本
       if: ${{ env.OP_NMS == 'true' }}
       shell: bash
       run: |
@@ -940,7 +945,7 @@ runs:
         bash "$BOUTEILLE_KERNEL_PATCHES_FOLDER/scripts/apply_nomount_stack.sh" hook
         bash "$BOUTEILLE_KERNEL_PATCHES_FOLDER/scripts/apply_nomount_stack.sh" ghost
 
-    - name: Add BBG
+    - name: 添加 BBG
       if: ${{ env.OP_BBG == 'true' }}
       shell: bash
       run: |
@@ -957,7 +962,7 @@ runs:
         echo "✅ BBG LSM added"
         echo "::endgroup::"
 
-    - name: Apply Other Patches
+    - name: 应用其他补丁
       shell: bash
       run: |
         set -euo pipefail
@@ -1006,7 +1011,7 @@ runs:
         echo "✅ Other patches applied"
         echo "::endgroup::"
 
-    - name: Apply Optimisation Patches
+    - name: 应用优化补丁
       if: ${{ env.OP_OPT == 'true' }}
       shell: bash
       run: |
@@ -1070,7 +1075,7 @@ runs:
         echo "✅ Optimisation Patches applied"
         echo "::endgroup::"
 
-    - name: Apply NTSync Patch
+    - name: 应用 NTSync 补丁
       shell: bash
       if: ${{ env.OP_NTSYNC == 'true' }}
       run: |
@@ -1113,7 +1118,7 @@ runs:
         echo "✅ NTSync patch applied"
         echo "::endgroup::"
 
-    - name: Apply Unicode Fix Patch
+    - name: 应用 Unicode 修复补丁
       shell: bash
       if: ${{ env.OP_UNICODE == 'true' }}
       run: |
@@ -1130,7 +1135,7 @@ runs:
             patch -p1 --forward < "$KERNEL_PATCHES_FOLDER/common/unicode_bypass_fix_6.1+.patch"
         fi
 
-    - name: Add Tmpfs Support
+    - name: 添加 Tmpfs 支持
       shell: bash
       run: |
         set -euo pipefail
@@ -1140,7 +1145,7 @@ runs:
         CONFIG_TMPFS_POSIX_ACL=y
         EOF
 
-    - name: Add BBR
+    - name: 添加 BBR
       if: ${{ env.OP_BBR == 'true' }}
       shell: bash
       run: |
@@ -1154,7 +1159,7 @@ runs:
         echo "✅ BBR patches applied"
         echo "::endgroup::"
 
-    - name: Apply BBRv3
+    - name: 应用 BBRv3
       if: ${{ env.OP_BBR3 == 'true' }}
       shell: bash
       run: |
@@ -1223,7 +1228,7 @@ runs:
         echo "✅ BBRv3 patches applied from Bouteillepleine/kernel_patches"
         echo "::endgroup::"
 
-    - name: Enable Important Net Schedulers (qdisc)
+    - name: 启用重要网络调度器（qdisc）
       shell: bash
       run: |
         set -euo pipefail
@@ -1234,7 +1239,7 @@ runs:
         CONFIG_NET_SCH_CAKE=y        
         EOF
 
-    - name: Add TTL Target Support
+    - name: 添加 TTL Target 支持
       if: ${{ env.OP_TTL == 'true' }}
       shell: bash
       run: |
@@ -1246,7 +1251,7 @@ runs:
         CONFIG_IP6_NF_MATCH_HL=y
         EOF
 
-    - name: Add IP SET & IPv6_NAT Support
+    - name: 添加 IP SET 与 IPv6_NAT 支持
       if: ${{ env.OP_IP_SET == 'true' }}
       shell: bash
       run: |
@@ -1288,7 +1293,7 @@ runs:
         
         patch -p1 -F 3 < "$KERNEL_PATCHES_FOLDER/common/IPv6_NAT_FIX.patch"
 
-    - name: Add Droidspaces support
+    - name: 添加 Droidspaces 支持
       shell: bash
       if: ${{ env.OP_DS == 'true' }}
       run: |
@@ -1343,7 +1348,7 @@ runs:
         echo "✅ Droidspaces Support applied"
         echo "::endgroup::"
 
-    - name: Add Build based configs
+    - name: 添加构建基础配置
       shell: bash
       run: |
         set -euo pipefail
@@ -1360,7 +1365,7 @@ runs:
         CONFIG_GDB_SCRIPTS=n
         EOF
 
-    - name: Add RUST build configs
+    - name: 添加 RUST 构建配置
       shell: bash
       if: ${{ env.OP_RUST_BUILD == 'true' }}
       run: |
@@ -1371,7 +1376,7 @@ runs:
         CONFIG_RUST=y
         EOF
 
-    - name: Save Build Metadata
+    - name: 保存构建元数据
       id: save_metadata
       shell: bash
       run: |
@@ -1383,7 +1388,7 @@ runs:
         echo "ksu_type=${{ inputs.ksu_type }}" >> "$GITHUB_OUTPUT"
         echo "build_timestamp=${EFFECTIVE_BUILD_TIMESTAMP:-unknown}" >> "$GITHUB_OUTPUT"
 
-    - name: Customize Kernel Branding
+    - name: 自定义内核标识（Branding）
       shell: bash
       run: |
         set -euo pipefail
@@ -1391,9 +1396,12 @@ runs:
         cd "$COMMON_KERNEL_FOLDER"
         mkdir -p out
         CUSTOM_LOCALVERSION="-${ANDROID_VER}-${OP_UNAME}"
+        if [ -n "${{ inputs.kernel_suffix }}" ]; then
+          CUSTOM_LOCALVERSION="${CUSTOM_LOCALVERSION}-${{ inputs.kernel_suffix }}"
+        fi
         echo "CUSTOM_LOCALVERSION=$CUSTOM_LOCALVERSION" >> "$GITHUB_ENV"
 
-    - name: Disable GPUEB
+    - name: 禁用 GPUEB
       shell: bash
       if: ${{ env.KERNEL_VER == '5.10' && (startsWith(env.OP_SOC, 'dimensity') || startsWith(env.OP_SOC, 'helio')) }}
       run: |
@@ -1401,7 +1409,7 @@ runs:
         echo "Disabling GPUEB for MTK kernel 5.10"
         sed -i '/obj-y.*gpueb/d' "$COMMON_KERNEL_FOLDER/drivers/gpu/mediatek/Makefile"
 
-    - name: Disable Vendor / Kernel Modules
+    - name: 禁用 Vendor / 内核模块
       shell: bash
       run: |
         set -euo pipefail
@@ -1452,7 +1460,7 @@ runs:
           curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 15 "$DEBLOAT_PATCH_URL" | patch -p1
         fi
 
-    - name: 🔧 Add ADIOS I/O Scheduler
+    - name: 🔧 添加 ADIOS I/O 调度器
       shell: bash
       if: ${{ inputs.enable_adios == true || inputs.enable_adios == 'true' }}
       run: |
@@ -1544,7 +1552,7 @@ runs:
         echo "✅ ADIOS I/O scheduler setup completed"
         echo "::endgroup::"
 
-    - name: Build Kernel
+    - name: 构建内核
       id: build_kernel_step
       shell: bash
       env:
@@ -1778,7 +1786,7 @@ runs:
         echo "============================================"
         echo "::endgroup::"
 
-    - name: 📊 ccache Post-Build Statistics
+    - name: 📊 ccache 构建后统计
       id: ccache_stats
       if: ${{ success() && (inputs.clean == false || inputs.clean == 'false') }}
       shell: bash
@@ -1842,7 +1850,7 @@ runs:
         ccache -s >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
 
-    - name: Collect Build Stats / Validate Image
+    - name: 收集构建统计 / 校验镜像
       id: collect_stats
       shell: bash
       run: |
@@ -1900,7 +1908,7 @@ runs:
         echo "   - Build time: ${BUILD_TIME}s"
         echo "::endgroup::"
 
-    - name: Create Kernel ZIP
+    - name: 创建内核 ZIP
       id: create_zip
       shell: bash
       run: |
@@ -1928,11 +1936,13 @@ runs:
         sed -i 's/do.check_boot_version=.*/do.check_boot_version=1/' anykernel.sh
         
         
+        KSFX=""
+        if [ -n "${{ inputs.kernel_suffix }}" ]; then KSFX="_${{ inputs.kernel_suffix }}"; fi
         ZIP_MODEL=$(echo "$OP_MODEL" | sed 's/-[0-9]\+\.[0-9]\+\.[0-9]\+$//')
         if [ "${{ env.OP_NMS }}" = true ]; then
-          ZIP_NAME="AK3_${ZIP_MODEL}_${OP_OS_VERSION}_${KERNEL_FULL_VER}_${{ inputs.ksu_type }}_${KSUVER:-unknown}.zip"
+          ZIP_NAME="AK3_${ZIP_MODEL}_${OP_OS_VERSION}_${KERNEL_FULL_VER}_${{ inputs.ksu_type }}_${KSUVER:-unknown}${KSFX}.zip"
         else
-          ZIP_NAME="AK3_${ZIP_MODEL}_${OP_OS_VERSION}_${KERNEL_FULL_VER}_${{ inputs.ksu_type }}_${KSUVER:-unknown}.zip"
+          ZIP_NAME="AK3_${ZIP_MODEL}_${OP_OS_VERSION}_${KERNEL_FULL_VER}_${{ inputs.ksu_type }}_${KSUVER:-unknown}${KSFX}.zip"
         fi
         mkdir -p "$ARTIFACTS_FOLDER"
         
@@ -1964,7 +1974,7 @@ runs:
         echo "   SHA256: $ZIP_SHA256"
         echo "::endgroup::"
 
-    - name: Final Build Summary
+    - name: 最终构建摘要
       shell: bash
       run: |
         set -euo pipefail
@@ -2026,9 +2036,9 @@ runs:
           echo "<details>"
           echo "<summary>${SUM_HEAD}</summary>"
           echo ""
-          echo "#### 🎯 Kernel Build Summary"
+          echo "#### 🎯 内核构建总结"
           echo ""
-          echo "| Metric | Value |"
+          echo "| 指标 | 数值 |"
           echo "|--------|-------|"
           echo "| **Model** | ${{ env.OP_MODEL }} |"
           echo "| **OS Version** | ${{ env.OP_OS_VERSION }} |"
@@ -2049,9 +2059,9 @@ runs:
           fi
           
           echo ""
-          echo "#### 🔧 OnePlus Features"
+          echo "#### 🔧 OnePlus 特性"
           echo ""
-          echo "| Feature | Status |"
+          echo "| 特性 | 状态 |"
           echo "|---------|--------|"
           echo "| **Kernel Optimisations** | ${{ env.OP_OPT }} |"
           echo "| **BBR** | ${{ env.OP_BBR }} |"
@@ -2065,9 +2075,9 @@ runs:
           echo "| **Droidspaces** | ${{ env.OP_DS }} |"
           
           echo ""
-          echo "#### 📊 Build Metrics"
+          echo "#### 📊 构建指标"
           echo ""
-          echo "| Metric | Value |"
+          echo "| 指标 | 数值 |"
           echo "|--------|-------|"
           echo "| **Optimization** | ${{ inputs.optimize_level }} |"
           echo "| **Clean Build** | ${{ inputs.clean }} |"
@@ -2087,7 +2097,7 @@ runs:
           echo "</details>"
         } >> "$GITHUB_STEP_SUMMARY"
 
-    - name: Upload Debug Artifacts
+    - name: 上传调试产物
       if: ${{ always() && !cancelled() && inputs.debug == 'true' }}
       uses: actions/upload-artifact@v7
       with:
@@ -2096,7 +2106,7 @@ runs:
         compression-level: 9
         retention-days: 90
 
-    - name: Upload Artifacts
+    - name: 上传构建产物
       if: success() && steps.create_zip.conclusion == 'success'
       uses: actions/upload-artifact@v7
       with:
@@ -2106,7 +2116,7 @@ runs:
         compression-level: 0
         retention-days: 90
 
-    - name: Upload ccache log
+    - name: 上传 ccache 日志
       if: success() && inputs.debug == 'true' && steps.build_kernel_step.conclusion == 'success'
       uses: actions/upload-artifact@v7
       with:
@@ -2116,14 +2126,14 @@ runs:
         compression-level: 0
         retention-days: 90
 
-    - name: 📥 Checkout Code
+    - name: 📥 检出代码
       uses: actions/checkout@v6
       if: always() && steps.build_kernel_step.conclusion == 'success'
       with:
         path: main-source
         fetch-depth: 1
 
-    - name: Normalize ccache before saving
+    - name: 保存前规范化 ccache
       if: ${{ always() && steps.build_kernel_step.conclusion == 'success' }}
       shell: bash
       run: |
@@ -2165,7 +2175,7 @@ runs:
 
         echo "::endgroup::"
 
-    - name: Save ccache cache
+    - name: 保存 ccache 缓存
       if: always() && steps.build_kernel_step.conclusion == 'success'
       uses: ./action-source/.github/actions/cache/save
       with:
@@ -2177,7 +2187,7 @@ runs:
         working_dir: "./main-source"
         compression_level: 6
 
-    - name: 🧹 Cleanup on failure
+    - name: 🧹 失败清理
       if: ${{ failure() }}
       shell: bash
       run: |

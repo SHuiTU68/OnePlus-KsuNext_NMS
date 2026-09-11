@@ -1,9 +1,9 @@
-name: Build and Release OnePlus Kernels
+name: 构建并发布 OnePlus 内核
 
 run-name: >-
   ${{ github.event.inputs.op_target_model != '' && github.event.inputs.op_target_model || github.event.inputs.op_model }}
   • KSUN
-  • ${{ github.event.inputs.build_timestamp != '' && github.event.inputs.build_timestamp || 'auto timestamp' }}
+  • ${{ github.event.inputs.build_timestamp != '' && github.event.inputs.build_timestamp || '自动时间戳' }}
 
 permissions:
   contents: write
@@ -19,12 +19,12 @@ on:
   workflow_dispatch:
     inputs:
       make_release:
-        description: 'Do you want to create a release?'
+        description: '是否创建 Release（发布）？'
         required: true
         type: boolean
         default: false
       op_model:
-        description: 'Select the OnePlus kernels to build'
+        description: '选择要构建的 OnePlus 内核'
         required: true
         type: choice
         options:
@@ -36,51 +36,56 @@ on:
           - android12-5.10
         default: A16
       op_target_model:
-        description: 'Optional exact/prefix model: OP12, OP13-CPH, OP-NORD-4, OP12-6.1.118. Case-sensitive. Empty = all.'
+        description: '可选的精确机型/前缀：OP12, OP13-CPH, OP-NORD-4, OP12-6.1.118（区分大小写）。留空 = 全部。'
         required: false
         type: string
         default: ''
       ksu_options:
-        description: 'Enter KernelSU Next build json'
+        description: '输入 KernelSU Next 构建 JSON'
         required: true
         type: string
         default: '[{"type":"KSUN","hash":"dev"}]'
       optimize_level:
-        description: "Compiler optimization level"
+        description: "编译器优化等级"
         required: true
         type: choice
         options: [O2, O3]
         default: O2
       build_timestamp:
-        description: 'Custom kernel build timestamp for uname -a (e.g. "Fri Dec 5 02:05:55 UTC 2025"). Leave empty for current time.'
+        description: '自定义内核构建时间戳（显示于 uname -a；例 "Fri Dec 5 02:05:55 UTC 2025"）。留空则使用当前时间。'
+        type: string
+        default: ''
+      kernel_suffix:
+        description: '自定义内核后缀（会追加到内核版本号、ZIP 文件名与 Release 标题；留空则不启用；开头勿加连字符，勿含空格等字符）'
+        required: false
         type: string
         default: ''
       mirror_toolchains:
-        description: 'Force toolchain sync before build — REQUIRED on the first run to populate the toolchain cache (auto-on for releases; ~99% of later test runs do not need it)'
+        description: '构建前强制同步工具链——首次运行必须开启以填充工具链缓存（发布 Release 时自动开启；之后约 99% 的测试运行无需开启）'
         required: false
         type: boolean
         default: false
       clean_build:
-        description: 'Clean build (no ccache)'
+        description: '全新构建（不使用 ccache 加速）'
         type: boolean
         default: false
       debug:
-        description: 'Enable debug mode: dumping debug related artifacts and show some debug logs'
+        description: '启用调试模式：导出调试产物并显示更多调试日志'
         required: false
         type: boolean
         default: false
       enable_adios:
-        description: 'Enable ADIOS I/O scheduler support (5.10/5.15/6.1/6.6/6.12 kernels)'
+        description: '启用 ADIOS I/O 调度器支持（5.10/5.15/6.1/6.6/6.12 内核）'
         required: false
         type: boolean
         default: false
       nomount_ref:
-        description: 'NoMount-Suite branch/ref for the Prism engine src + patches (default main; set a branch to validate it before it is released). The engine ships inside the Suite repo, under hookless/.'
+        description: 'NoMount-Suite 的分支/引用（提供 Prism 引擎源码与补丁；默认 main；可设某分支先行验证）。引擎位于该仓库 hookless/ 目录。'
         required: false
         type: string
         default: main
       patches_ref:
-        description: 'kernel_patches branch/ref for the _ghost/_hook/_pathhide cloaks and the apply script (default main; set a branch to validate before merge)'
+        description: 'kernel_patches 的分支/引用（提供 _ghost/_hook/_pathhide 隐藏特性与 apply 脚本；默认 main；可设分支先行验证）'
         required: false
         type: string
         default: main
@@ -99,10 +104,10 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_HTTP_TIMEOUT: 600
     steps:
-      - name: 📥 Checkout Code (to access configs/)
+      - name: 📥 检出代码（用于读取 configs/）
         uses: actions/checkout@v6
 
-      - name: 🔍 Generate build matrix
+      - name: 🔍 生成构建矩阵
         id: set-matrix
         shell: bash
         run: |
@@ -305,7 +310,7 @@ jobs:
           rm final_matrix_temp.json
           echo "::endgroup::"
 
-      - name: Upload build matrix
+      - name: 上传构建矩阵
         uses: actions/upload-artifact@v7
         with:
           name: build-matrix
@@ -313,7 +318,7 @@ jobs:
           archive: false
           retention-days: 7
 
-      - name: 📊 Build plan summary
+      - name: 📊 构建计划摘要
         run: |
           ksu_type="${{ fromJSON(steps.set-matrix.outputs.ksu_options_normalized)[0].type }}"
           ksu_ref="${{ fromJSON(steps.set-matrix.outputs.ksu_options_normalized)[0].hash }}"
@@ -327,39 +332,39 @@ jobs:
           
           build_ts_input="${{ inputs.build_timestamp }}"
           if [ -z "$build_ts_input" ]; then
-            build_ts_display="⏱️ auto (current build time)"
+            build_ts_display="⏱️ 自动（当前构建时间）"
           else
             build_ts_display="📌 \`$build_ts_input\`"
           fi
           
           {
-            echo "## 🎯 Build Plan"
+            echo "## 🎯 构建计划"
             echo ""
-            echo "> **${{ inputs.op_model }}** · **${{ steps.set-matrix.outputs.count }}** device(s) · KSU \`$ksu_type\` · \`${{ inputs.optimize_level }}\`${{ inputs.make_release && ' · 📦 release' || '' }}"
+            echo "> **${{ inputs.op_model }}** · **${{ steps.set-matrix.outputs.count }}** 台设备 · KSU \`$ksu_type\` · \`${{ inputs.optimize_level }}\`${{ inputs.make_release && ' · 📦 发布' || '' }}"
             echo ""
-            echo "| Setting | Value |"
+            echo "| 设置项 | 值 |"
             echo "|---------|-------|"
-            echo "| 🎯 Target | \`${{ inputs.op_model }}\` · model \`${{ inputs.op_target_model != '' && inputs.op_target_model || 'all' }}\` · **${{ steps.set-matrix.outputs.count }}** device(s) |"
+            echo "| 🎯 目标 | \`${{ inputs.op_model }}\` · 机型 \`${{ inputs.op_target_model != '' && inputs.op_target_model || 'all' }}\` · **${{ steps.set-matrix.outputs.count }}** 台设备 |"
             echo "| 🧩 KSU | $ksu_display |"
-            echo "| ⏱️ Timestamp | $build_ts_display |"
-            echo "| ⚙️ Optimization | \`${{ inputs.optimize_level }}\` |"
-            echo "| 🧹 Clean build (no ccache) | ${{ inputs.clean_build && '✅' || '❌' }} |"
-            echo "| 📦 Create release | ${{ inputs.make_release && '✅' || '❌' }} |"
-            echo "| 🔄 Toolchain sync | ${{ (inputs.mirror_toolchains || inputs.make_release) && '✅' || '❌' }}${{ (!inputs.mirror_toolchains && inputs.make_release) && ' · auto for release' || '' }} |"
-            echo "| 🧰 ADIOS · Debug artifacts | ${{ inputs.enable_adios && '✅' || '❌' }} · ${{ inputs.debug && '✅' || '❌' }} |"
+            echo "| ⏱️ 时间戳 | $build_ts_display |"
+            echo "| ⚙️ 优化等级 | \`${{ inputs.optimize_level }}\` |"
+            echo "| 🧹 全新构建（无 ccache） | ${{ inputs.clean_build && '✅' || '❌' }} |"
+            echo "| 📦 创建发行 | ${{ inputs.make_release && '✅' || '❌' }} |"
+            echo "| 🔄 工具链同步 | ${{ (inputs.mirror_toolchains || inputs.make_release) && '✅' || '❌' }}${{ (!inputs.mirror_toolchains && inputs.make_release) && ' · 发布时自动' || '' }} |"
+            echo "| 🧰 ADIOS · 调试产物 | ${{ inputs.enable_adios && '✅' || '❌' }} · ${{ inputs.debug && '✅' || '❌' }} |"
             echo ""
             echo ""
-            echo "**NoMount (hookless)** — \`Bouteillepleine/NoMount-Suite\`, version \`${{ steps.set-matrix.outputs.nomount_version }}\`"
+            echo "**NoMount (hookless)** — \`Bouteillepleine/NoMount-Suite\`，版本 \`${{ steps.set-matrix.outputs.nomount_version }}\`"
             echo ""
           } >> "$GITHUB_STEP_SUMMARY"
           
           
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "> **💡 Note:** Hashes are resolved at run time via API calls before builds start." >> $GITHUB_STEP_SUMMARY
+          echo "> **💡 说明：** 哈希值会在构建开始前通过 API 实时解析。" >> $GITHUB_STEP_SUMMARY
           
           if [[ "${{ inputs.op_model }}" == android*-*.* ]]; then
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "> **⚠️ Android-Kernel Filter:** Only A16 devices will be built for \`${{ inputs.op_model }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "> **⚠️ Android-Kernel 过滤：** 仅会为 \`${{ inputs.op_model }}\` 构建 A16 设备" >> $GITHUB_STEP_SUMMARY
           fi
 
   mirror_toolchain:
@@ -369,10 +374,10 @@ jobs:
     secrets: inherit
 
   prepare_ccache:
-    name: Prepare ccache binary (download once)
+    name: 🧰 准备 ccache 二进制（仅下载一次）
     runs-on: ubuntu-latest
     steps:
-      - name: Download custom ccache once
+      - name: 下载自定义 ccache（一次）
         run: |
           set -uo pipefail
           echo "::group::Download ccache"
@@ -392,7 +397,7 @@ jobs:
             rm -f ccache
           fi
           echo "::endgroup::"
-      - name: Upload ccache artifact
+      - name: 上传 ccache 工件
         uses: actions/upload-artifact@v7
         with:
           name: ccache-binary
@@ -418,16 +423,16 @@ jobs:
     env:
       OP_TOTAL_DEVICES: ${{ needs.set-op-model.outputs.device_count }}
     steps:
-      - name: 📥 Checkout Code
+      - name: 📥 检出代码
         uses: actions/checkout@v6
         with:
           fetch-depth: 1
 
-      - name: 🧹 Emergency Disk Cleanup
+      - name: 🧹 紧急磁盘清理
         if: ${{ matrix.disk_cleanup }}
         uses: ./.github/actions/disk-cleanup
 
-      - name: Install Minimal Dependencies
+      - name: 安装最小依赖
         run: |
           set -euo pipefail
           echo "::group::Install dependencies"
@@ -469,14 +474,14 @@ jobs:
           echo "✅ Dependencies installed"
           echo "::endgroup::"
 
-      - name: Get prebuilt ccache (downloaded once by prepare_ccache)
+      - name: 获取预置 ccache（由 prepare_ccache 一次性下载）
         uses: actions/download-artifact@v8
         with:
           name: ccache-binary
           path: ccache-dl
         continue-on-error: true
 
-      - name: Install ccache (ECS by cctv18, shared via artifact)
+      - name: 安装 ccache（ECS by cctv18，经工件共享）
         run: |
           set -uo pipefail
           echo "::group::Install ccache"
@@ -491,7 +496,7 @@ jobs:
           echo "[DEBUG] Ccache version : $(ccache --version | head -1)"
           echo "::endgroup::"
 
-      - name: ♻️ Configure ccache (bounded)
+      - name: ♻️ 配置 ccache（有界）
         run: |
           echo "::group::Configure ccache environment"
           set -euo pipefail
@@ -540,13 +545,13 @@ jobs:
           fi
           echo "::endgroup::"
 
-      - name: 🧹 Prepare op_config_json (without KSU fields)
+      - name: 🧹 准备 op_config_json（移除 KSU 字段）
         id: prepare_config
         shell: bash
         run: |
           echo "config_json=$(jq -nc --argjson m '${{ toJSON(matrix) }}' '$m | del(.ksu_type, .ksu_hash, .ksu_resolved_hash)')" >> "$GITHUB_OUTPUT"
 
-      - name: 🔨 Build Kernel
+      - name: 🔨 构建内核
         id: build
         uses: ./.github/actions/build-kernel
         with:
@@ -555,6 +560,7 @@ jobs:
           ksu_branch_or_hash: ${{ matrix.ksu_resolved_hash }}
           optimize_level: ${{ inputs.optimize_level }}
           build_timestamp: ${{ inputs.build_timestamp }}
+          kernel_suffix: ${{ inputs.kernel_suffix }}
           enable_adios: ${{ inputs.enable_adios }}
           nomount_ref: ${{ inputs.nomount_ref }}
           patches_ref: ${{ inputs.patches_ref }}
@@ -562,7 +568,7 @@ jobs:
           debug: ${{ inputs.debug }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: 📊 Build statistics
+      - name: 📊 构建统计
         id: build-stat
         if: always()
         run: |
@@ -600,12 +606,12 @@ jobs:
           
           echo "::endgroup::"
 
-      - name: 📝 Job summary
+      - name: 📝 任务摘要
         if: always()
         run: |
           cat >> $GITHUB_STEP_SUMMARY << EOF
           
-          ### ${{ matrix.model }} (${{ matrix.os_version }}) - ${{ job.status == 'success' && '✅ Success' || '❌ Failed' }}
+          ### ${{ matrix.model }} (${{ matrix.os_version }}) - ${{ job.status == 'success' && '✅ 成功' || '❌ 失败' }}
           
           **Kernel:** ${{ matrix.android_version }}-${{ matrix.kernel_version }}
           EOF
@@ -642,7 +648,7 @@ jobs:
           EOF
           fi
 
-      - name: 🧹 Final cleanup and space report
+      - name: 🧹 最终清理与磁盘报告
         if: always()
         run: |
           echo "::group::Cleanup"
@@ -668,14 +674,14 @@ jobs:
           echo "::endgroup::"
 
   build_report:
-    name: 📋 Build report
+    name: 📋 构建报告
     needs: [set-op-model, build]
     if: always()
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Summarize build results
+      - name: 汇总构建结果
         run: |
           set -uo pipefail
           jobs="$(gh api --paginate \
@@ -687,14 +693,14 @@ jobs:
           bad=$(printf '%s\n'   "$jobs" | grep -cvE '^success' || true)
 
           {
-            echo "## 📋 Build Report"
+            echo "## 📋 构建报告"
             echo ""
-            echo "**✅ ${ok} succeeded · ❌ ${bad} failed · ${total} total**"
+            echo "**✅ 成功 ${ok} · ❌ 失败 ${bad} · 共 ${total}**"
             if [ "${bad:-0}" -gt 0 ]; then
               echo ""
-              echo "### ❌ Failed / cancelled"
+              echo "### ❌ 失败 / 已取消"
               echo ""
-              echo "| Device | Result |"
+              echo "| 机型 | 结果 |"
               echo "|--------|--------|"
               printf '%s\n' "$jobs" | grep -vE '^success' | while IFS=$'\t' read -r concl name; do
                 dev=$(printf '%s' "$name" | sed -E 's/^build \(([^,]+),[^,]+,[^,]+,[^,]+, *([^,]+), *([^,]+), *([^,]+),.*/\1 (\2-\3, \4)/')
@@ -718,12 +724,12 @@ jobs:
       NOMOUNT_VERSION: ${{ needs.set-op-model.outputs.nomount_version }}
       RELEASE_NAME: 'KernelSU Next 📦 NoMount (v${{ needs.set-op-model.outputs.nomount_version }})'
     steps:
-      - name: 📥 Checkout code
+      - name: 📥 检出代码
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: 🏷️ Generate and Create New Tag
+      - name: 🏷️ 生成并创建新标签
         run: |
           TAG_BASE="nm${NOMOUNT_VERSION}"
 
@@ -754,14 +760,14 @@ jobs:
           echo "New tag: $NEW_TAG (highest existing suffix: ${LATEST_N:-none})"
           echo "NEW_TAG=${NEW_TAG}" >> $GITHUB_ENV
 
-      - name: 📥 Download Artifacts
+      - name: 📥 下载构建工件
         uses: actions/download-artifact@v8
         with:
           path: ./downloaded-artifacts
           merge-multiple: true
           skip-decompress: true
 
-      - name: 🔐 Generate Checksums
+      - name: 🔐 生成校验和
         shell: bash
         run: |
           set -euo pipefail
@@ -779,31 +785,31 @@ jobs:
           echo "Generated 00_CHECKSUMS.txt:"
           cat 00_CHECKSUMS.txt
 
-      - name: 📥 Generate Downloads Index
+      - name: 📥 生成下载索引
         shell: bash
         run: |
           set -euo pipefail
 
           {
-            echo "# 📥 OnePlus Kernel Downloads"
+            echo "# 📥 OnePlus 内核下载"
             echo ""
-            echo "> Select the ZIP matching your exact **device**, **OS version**, and **kernel base**."
+            echo "> 请选择与你的**机型**、**系统版本**和**内核基线**完全匹配的 ZIP。"
             echo ""
-            echo "## ⚠️ Important"
+            echo "## ⚠️ 重要提示"
             echo ""
-            echo "- Flashing the wrong ZIP may cause bootloop."
-            echo "- Back up your current boot/init_boot/vendor_boot before flashing."
-            echo "- Use Kernel Flasher or another trusted flashing method."
-            echo "- If switching from Magisk, APatch, KernelSU, KernelSU Next, or another fork, clean old root leftovers carefully."
+            echo "- 刷入错误的 ZIP 可能导致无法开机（bootloop）。"
+            echo "- 刷入前请备份当前的 boot/init_boot/vendor_boot 分区。"
+            echo "- 请使用 Kernel Flasher 或其他可信的刷入方式。"
+            echo "- 若从 Magisk、APatch、KernelSU、KernelSU Next 或其他分支切换，请先妥善清理旧 root 残留。"
             echo ""
-            echo "## Quick Guide"
+            echo "## 快速指南"
             echo ""
-            echo "| What to check | Example |"
+            echo "| 检查项 | 示例 |"
             echo "|---|---|"
-            echo "| **Device** | \`OP12\`, \`OP13r\`, \`OP-NORD-4\` |"
-            echo "| **OS Version** | \`A16\` |"
-            echo "| **Kernel Base** | \`android15-6.6.30\`, \`android14-6.1.75\` |"
-            echo "| **Root Type** | \`KSUN\` |"
+            echo "| **机型** | \`OP12\`, \`OP13r\`, \`OP-NORD-4\` |"
+            echo "| **系统版本** | \`A16\` |"
+            echo "| **内核基线** | \`android15-6.6.30\`, \`android14-6.1.75\` |"
+            echo "| **Root 类型** | \`KSUN\` |"
             echo ""
           } > 00_DOWNLOADS.md
 
@@ -864,7 +870,7 @@ jobs:
           echo "Generated 00_DOWNLOADS.md:"
           cat 00_DOWNLOADS.md
 
-      - name: 📝 Generate Device List and Final Release Notes
+      - name: 📝 生成机型列表与最终发行说明
         id: generate-notes
         run: |
           echo "=== Start building the release notes ==="
@@ -1139,15 +1145,15 @@ jobs:
 
           ---
           
-          ## 📜 Changelog
+          ## 📜 更新日志
 
-          See the [Releases page](${{ github.server_url }}/${{ github.repository }}/releases) for the full history.
+          想要查看完整历史，请访问 [Releases 页面](${{ github.server_url }}/${{ github.repository }}/releases)。
           
           ---
           
-          ## 🙏 Credits
+          ## 🙏 致谢
           
-          **KernelSU Next Team**, **NoMount** (Bouteillepleine & Contributors, on maxsteeel's original), **WildKernels**, **OnePlus** (kernel source), and community testers.
+          **KernelSU Next Team**、**NoMount**（Bouteillepleine 及贡献者们，基于 maxsteeel 原作）、**WildKernels**、**OnePlus**（内核源码）以及社区测试者们。
           
           EOF
           
@@ -1159,16 +1165,16 @@ jobs:
           echo "--- Final Release Notes ---"
           cat release_notes.md
 
-      - name: 🚀 Create GitHub Release
+      - name: 🚀 创建 GitHub Release
         run: |
           gh release create "${{ env.NEW_TAG }}" \
             --repo "${{ env.REPO_OWNER }}/${{ env.REPO_NAME }}" \
             --target "${{ github.sha }}" \
-            --title "${{ env.RELEASE_NAME }}" \
+            --title "${{ env.RELEASE_NAME }}${{ github.event.inputs.kernel_suffix != '' && format('-{0}', github.event.inputs.kernel_suffix) || '' }}" \
             --notes-file release_notes.md \
             --draft
 
-      - name: 📤 Upload Release Assets Dynamically
+      - name: 📤 动态上传发行资产
         run: |
           for file in ./downloaded-artifacts/*.zip; do
             if [ -f "$file" ]; then
@@ -1183,19 +1189,19 @@ jobs:
             fi
           done
 
-      - name: 📊 Release summary
+      - name: 📊 发行摘要
         if: success()
         run: |
           cat >> $GITHUB_STEP_SUMMARY << EOF
           
           ---
           
-          ## 🎉 Release Created Successfully
+          ## 🎉 Release 创建成功
           
-          **Tag:** [\`${{ env.NEW_TAG }}\`](${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ env.NEW_TAG }})  
-          **Kernels:** $(find ./downloaded-artifacts -maxdepth 1 -name "*.zip" -type f | wc -l)
+          **标签：** [\`${{ env.NEW_TAG }}\`](${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ env.NEW_TAG }})  
+          **内核数量：** $(find ./downloaded-artifacts -maxdepth 1 -name "*.zip" -type f | wc -l)
           
-          ### 📦 Assets
+          ### 📦 资产
           EOF
           
           for zip in ./downloaded-artifacts/*.zip; do

@@ -1,4 +1,4 @@
-name: Mirror static toolchains to GitHub Release
+name: 镜像静态工具链到 GitHub Release
 
 permissions:
   contents: write
@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # No checkout: the cache release is a draft, so there is no git tag to create.
-      - name: Ensure Single Draft Release
+      - name: 确保唯一草稿 Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
@@ -51,12 +51,12 @@ jobs:
       count: ${{ steps.set-matrix.outputs.count }}
 
     steps:
-      - name: Checkout Code
+      - name: 检出代码
         uses: actions/checkout@v6
         with:
           fetch-depth: 1
 
-      - name: Build Combined Config JSON
+      - name: 构建合并配置 JSON
         id: build-config-json
         shell: bash
         run: |
@@ -127,7 +127,7 @@ jobs:
           echo "First few configs:"
           jq '.[0:5] | map({model, os_version, branch, manifest})' all_configs.json
 
-      - name: Resolve Unique Projects
+      - name: 解析唯一项目清单
         id: set-matrix
         shell: python
         env:
@@ -320,7 +320,7 @@ jobs:
               print("::warning::No toolchain projects found. Mirror job will be skipped.")
 
   mirror-to-release:
-    name: mirror (${{ matrix.type_label }}, ${{ matrix.rev }})
+    name: 镜像 (${{ matrix.type_label }}, ${{ matrix.rev }})
     needs:
       - prepare-release
       - generate-mirror-matrix
@@ -335,7 +335,7 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
-      - name: Install download tools
+      - name: 安装下载工具
         shell: bash
         run: |
           set -euo pipefail
@@ -350,7 +350,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends aria2 pigz
           sudo apt-get clean
 
-      - name: Sync and Upload Toolchain
+      - name: 同步并上传工具链
         shell: bash
         run: |
           set -euo pipefail

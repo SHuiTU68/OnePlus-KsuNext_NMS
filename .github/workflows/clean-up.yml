@@ -1,11 +1,11 @@
-name: 🧹 Cleanup Caches and Workflow Runs
+name: 🧹 清理缓存与工作流运行记录
 
 on:
   workflow_dispatch:
     inputs:
       cleanup_type:
         type: choice
-        description: 'Cleanup target'
+        description: '清理目标'
         required: true
         default: 'cache_only'
         options:
@@ -16,7 +16,7 @@ on:
 
       device_filter:
         type: choice
-        description: 'Device/kernel cache to clean'
+        description: '要清理的设备/内核缓存'
         required: false
         default: 'ALL'
         options:
@@ -93,7 +93,7 @@ on:
 
       cache_pattern:
         type: choice
-        description: 'Cache type to clean'
+        description: '要清理的缓存类型'
         required: false
         default: 'all_caches'
         options:
@@ -105,40 +105,40 @@ on:
           - stale_only
 
       cache_age_days:
-        description: 'Delete caches older than N days'
+        description: '删除超过 N 天的缓存'
         required: false
         default: '7'
 
       keep_recent_runs:
-        description: 'Keep N most recent successful runs per workflow'
+        description: '每个工作流保留最近 N 次成功运行'
         required: false
         default: '3'
 
       days_to_keep:
-        description: 'Keep workflow runs from last N days'
+        description: '保留最近 N 天的工作流运行记录'
         required: false
         default: '7'
 
       dry_run:
-        description: 'Dry run: show what would be deleted'
+        description: '试运行：仅显示将要删除的内容'
         required: false
         type: boolean
         default: false
 
       force_cleanup:
-        description: 'Force cleanup even if usage is low'
+        description: '即使占用较低也强制执行清理'
         required: false
         type: boolean
         default: false
 
       prune_toolchain_cache:
-        description: 'Also prune stale assets from the toolchain-cache release'
+        description: '同时清理 toolchain-cache Release 中的过期资产'
         required: false
         type: boolean
         default: false
 
       toolchain_cache_age_days:
-        description: 'Toolchain-cache: delete assets not updated in N days (a release rebuild re-mirrors any still-needed ones)'
+        description: 'toolchain-cache：删除 N 天内未更新的资产（发布重建时会重新镜像仍需要的文件）'
         required: false
         default: '90'
 
@@ -159,7 +159,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Prune stale toolchain-cache assets
+      - name: 清理过期的 toolchain-cache 资产
         run: |
           set -uo pipefail
           TAG="toolchain-cache"
@@ -207,7 +207,7 @@ jobs:
       lto_size: ${{ steps.analysis.outputs.lto_size }}
 
     steps:
-      - name: 📊 Analyze Repository Cache Health
+      - name: 📊 分析仓库缓存健康度
         id: analysis
         uses: actions/github-script@v7
         with:
@@ -526,7 +526,7 @@ jobs:
       inputs.cleanup_type != 'analyze_only'
 
     steps:
-      - name: 🗑️ Smart Cache Cleanup
+      - name: 🗑️ 智能缓存清理
         uses: actions/github-script@v7
         with:
           script: |
@@ -840,7 +840,7 @@ jobs:
       inputs.cleanup_type != 'analyze_only'
 
     steps:
-      - name: 🗑️ Clean Old Workflow Runs
+      - name: 🗑️ 清理旧工作流运行记录
         uses: actions/github-script@v7
         with:
           script: |
@@ -1037,7 +1037,7 @@ jobs:
     if: always()
 
     steps:
-      - name: 📊 Final Repository Health Report
+      - name: 📊 最终仓库健康报告
         uses: actions/github-script@v7
         with:
           script: |
@@ -1250,7 +1250,7 @@ jobs:
             console.log(`Current usage: ${formatGB(totalCacheSize)} GB (${usagePercent}%)`);
             console.log(`Status: ${healthStatus}`);
 
-      - name: 💡 Quick Action Commands
+      - name: 💡 快捷操作命令
         if: always()
         shell: bash
         run: |

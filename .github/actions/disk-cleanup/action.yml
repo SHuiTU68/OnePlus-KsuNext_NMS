@@ -1,8 +1,8 @@
-name: 'Disk Cleanup'
+name: '磁盘清理'
 
 inputs:
   debug:
-    description: 'Enable Logs'
+    description: '启用日志'
     required: false
     type: boolean
     default: false
@@ -10,7 +10,7 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Disk Cleanup by Deleting files
+    - name: 通过删除文件进行磁盘清理
       shell: bash
       run: |
         # Disk Cleanup by Deleting files

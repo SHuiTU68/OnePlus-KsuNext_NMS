@@ -1,4 +1,4 @@
-name: OnePlusOSS Kernel Monitor
+name: OnePlusOSS 内核监控
 
 on:
   schedule:
@@ -20,12 +20,12 @@ jobs:
       GH_HTTP_TIMEOUT: 600
 
     steps:
-      - name: Checkout Main
+      - name: 检出 main 分支
         uses: actions/checkout@v6
         with:
           path: main
 
-      - name: Configure Blacklist
+      - name: 配置黑名单
         id: blacklist_config
         run: |
           cat >> $GITHUB_ENV <<EOF
@@ -53,7 +53,7 @@ jobs:
           BLOCK
           EOF
 
-      - name: Prepare Persistence from Status Branch
+      - name: 从状态分支准备持久化数据
         run: |
           git clone --branch status-page https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} status_repo || mkdir status_repo
           cd status_repo
@@ -66,7 +66,7 @@ jobs:
             echo "ℹ️ No existing state found. Starting fresh."
           fi
 
-      - name: Process Repositories
+      - name: 处理仓库列表
         id: scanner
         run: |
           cd main
@@ -328,7 +328,7 @@ jobs:
           echo -e "$FINAL_LOG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Manage Notification Issue
+      - name: 管理通知 Issue
         if: steps.scanner.outputs.changes_found == 'true'
         run: |
           gh label create "notification" --color "BFD4F2" --repo ${{ github.repository }} --force || true
@@ -350,7 +350,7 @@ jobs:
             gh issue comment $ISSUE_NUMBER --repo ${{ github.repository }} --body "$BODY"
           fi
 
-      - name: Update Status Branch README
+      - name: 更新状态分支 README
         if: success()
         run: |
           git config --global user.name "github-actions[bot]"
