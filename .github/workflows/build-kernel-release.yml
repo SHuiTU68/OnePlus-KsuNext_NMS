@@ -79,6 +79,16 @@ on:
         required: false
         type: boolean
         default: false
+      lz4_enable:
+        description: '安装 lz4 1.10.0 + zstd 1.5.7 补丁（zram 压缩性能优化；默认开启）'
+        required: false
+        type: boolean
+        default: true
+      lz4kd_enable:
+        description: '安装 LZ4KD 补丁（zram 压缩性能优化；若已开启 lz4+zstd 补丁则可不开启）'
+        required: false
+        type: boolean
+        default: false
       nomount_ref:
         description: 'NoMount-Suite 的分支/引用（提供 Prism 引擎源码与补丁；默认 main；可设某分支先行验证）。引擎位于该仓库 hookless/ 目录。'
         required: false
@@ -562,6 +572,8 @@ jobs:
           build_timestamp: ${{ inputs.build_timestamp }}
           kernel_suffix: ${{ inputs.kernel_suffix }}
           enable_adios: ${{ inputs.enable_adios }}
+          lz4_enable: ${{ inputs.lz4_enable }}
+          lz4kd_enable: ${{ inputs.lz4kd_enable }}
           nomount_ref: ${{ inputs.nomount_ref }}
           patches_ref: ${{ inputs.patches_ref }}
           clean: ${{ inputs.clean_build }}

@@ -46,6 +46,16 @@ inputs:
     required: false
     type: boolean
     default: false
+  lz4_enable:
+    description: '安装 lz4 1.10.0 + zstd 1.5.7 补丁（zram 压缩性能优化；默认开启）'
+    required: false
+    type: boolean
+    default: true
+  lz4kd_enable:
+    description: '安装 LZ4KD 补丁（zram 压缩性能优化；若已开启 lz4+zstd 补丁则可不开启）'
+    required: false
+    type: boolean
+    default: false
   nomount_ref:
     description: 'NoMount-Suite 的分支/引用（提供 Prism 引擎源码与补丁；默认 main；可设分支先行验证）。引擎位于该仓库 hookless/ 目录。'
     required: false
@@ -929,6 +939,53 @@ runs:
       run: |
         bash "$BOUTEILLE_KERNEL_PATCHES_FOLDER/scripts/fix_ksu_cfi_symbol_calls.sh"
 
+    - name: 应用 lz4 1.10.0 & zstd 1.5.7 补丁
+      if: ${{ inputs.lz4_enable == 'true' || inputs.lz4_enable == true }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::Apply lz4 1.10.0 & zstd 1.5.7 patches"
+        ZRAM_SRC="$GITHUB_WORKSPACE/action-source/zram_patch"
+        if [ ! -f "$ZRAM_SRC/001-lz4.patch" ] && [ -f "$GITHUB_WORKSPACE/zram_patch/001-lz4.patch" ]; then
+          ZRAM_SRC="$GITHUB_WORKSPACE/zram_patch"
+        fi
+        if [ ! -f "$ZRAM_SRC/001-lz4.patch" ]; then
+          echo "zram_patch not found in workspace; fetching from repo..."
+          mkdir -p "$ZRAM_SRC"
+          for f in 001-lz4.patch 001-lz4-clearMake.patch 002-zstd.patch lz4armv8.S; do
+            wget -q "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/refs/heads/$GITHUB_REF_NAME/zram_patch/$f" -O "$ZRAM_SRC/$f"
+          done
+        fi
+        cp "$ZRAM_SRC/001-lz4.patch" "$COMMON_KERNEL_FOLDER/"
+        cp "$ZRAM_SRC/001-lz4-clearMake.patch" "$COMMON_KERNEL_FOLDER/"
+        cp "$ZRAM_SRC/lz4armv8.S" "$COMMON_KERNEL_FOLDER/lib"
+        cp "$ZRAM_SRC/002-zstd.patch" "$COMMON_KERNEL_FOLDER/"
+        cd "$COMMON_KERNEL_FOLDER"
+        git apply -p1 < 001-lz4.patch || true
+        git apply -p1 < 001-lz4-clearMake.patch || true
+        patch -p1 < 002-zstd.patch || true
+        echo "✅ lz4 1.10.0 & zstd 1.5.7 patches applied"
+        echo "::endgroup::"
+
+    - name: 应用 LZ4KD 补丁
+      if: ${{ inputs.lz4kd_enable == 'true' || inputs.lz4kd_enable == true }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::Apply lz4kd patch"
+        SUKISU_DIR="$(dirname "$COMMON_KERNEL_FOLDER")/SukiSU_patch"
+        if [ ! -d "$SUKISU_DIR" ]; then
+          git clone --depth=1 https://github.com/ShirkNeko/SukiSU_patch.git "$SUKISU_DIR"
+        fi
+        cd "$COMMON_KERNEL_FOLDER"
+        cp -r "$SUKISU_DIR/other/zram/lz4k/include/linux/"* ./include/linux/
+        cp -r "$SUKISU_DIR/other/zram/lz4k/lib/"* ./lib
+        cp -r "$SUKISU_DIR/other/zram/lz4k/crypto/"* ./crypto
+        cp "$SUKISU_DIR/other/zram/zram_patch/${{ env.KERNEL_VER }}/lz4kd.patch" ./
+        patch -p1 -F3 < lz4kd.patch || true
+        echo "✅ lz4kd patch applied"
+        echo "::endgroup::"
+
     - name: 应用 NoMount（hookless）补丁
       if: ${{ env.OP_NMS == 'true' }}
       shell: bash
@@ -1364,6 +1421,22 @@ runs:
         CONFIG_DEBUG_ATOMIC_SLEEP=n
         CONFIG_GDB_SCRIPTS=n
         EOF
+
+    - name: 添加 LZ4KD 配置项
+      if: ${{ inputs.lz4kd_enable == 'true' || inputs.lz4kd_enable == true }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "::group::Add LZ4KD configs"
+        cat >> "$COMMON_KERNEL_FOLDER/arch/arm64/configs/gki_defconfig" <<'EOF'
+        CONFIG_ZSMALLOC=y
+        CONFIG_CRYPTO_LZ4HC=y
+        CONFIG_CRYPTO_LZ4K=y
+        CONFIG_CRYPTO_LZ4KD=y
+        CONFIG_CRYPTO_842=y
+        EOF
+        echo "✅ LZ4KD configs added"
+        echo "::endgroup::"
 
     - name: 添加 RUST 构建配置
       shell: bash
@@ -1934,6 +2007,19 @@ runs:
         cd "$AK3_FOLDER"
         
         sed -i 's/do.check_boot_version=.*/do.check_boot_version=1/' anykernel.sh
+
+        if [ "${{ inputs.lz4kd_enable }}" = "true" ]; then
+          ZRAM_ZIP_SRC="$GITHUB_WORKSPACE/action-source/zram.zip"
+          if [ ! -f "$ZRAM_ZIP_SRC" ] && [ -f "$GITHUB_WORKSPACE/zram.zip" ]; then
+            ZRAM_ZIP_SRC="$GITHUB_WORKSPACE/zram.zip"
+          fi
+          if [ ! -f "$ZRAM_ZIP_SRC" ]; then
+            ZRAM_ZIP_SRC="/tmp/zram.zip"
+            wget -q "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/refs/heads/$GITHUB_REF_NAME/zram.zip" -O "$ZRAM_ZIP_SRC"
+          fi
+          cp "$ZRAM_ZIP_SRC" "$AK3_FOLDER/zram.zip"
+          echo "✅ zram.zip bundled into AnyKernel3 package"
+        fi
         
         
         KSFX=""
@@ -2009,6 +2095,8 @@ runs:
           echo "Unicode Fix: ${{ env.OP_UNICODE }}"
           echo "NTSync: ${{ env.OP_NTSYNC }}"
           echo "Droidspaces: ${{ env.OP_DS }}"
+          echo "LZ4: ${{ inputs.lz4_enable }}"
+          echo "LZ4KD: ${{ inputs.lz4kd_enable }}"
           echo ""
           echo "Image SHA256: ${{ steps.collect_stats.outputs.image_sha256 }}"
           echo "AnyKernel3 ZIP SHA256: ${{ steps.create_zip.outputs.zip_sha256 }}"
